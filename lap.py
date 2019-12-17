@@ -27,29 +27,13 @@ class fakeFunction:
 	def getY(self, wantX):
 		if(wantX < self.start or wantX > self.end):
 			raise ValueError("Trying to retrieve x value out of bounds")
-		# smaller = self.start
-		# for i in range(0, len(self.x)):
-		# 	hasX = self.x[i]
-		# 	if(hasX == wantX):
-		# 		return self.y[i]
-		# 	elif(hasX < wantX):
-		# 		smaller = hasX
-		# 	else:
 		smaller, bigger = binSearch(self.x, wantX)
 		if(smaller == bigger):
 			return self.y[smaller]
-		# bigger = hasX
 		xDiff = self.x[bigger]-self.x[smaller]
 		yDiff = self.y[bigger] - self.y[smaller]
 		ratio = (wantX-self.x[smaller])/xDiff
-		# print("X small", self.x[smaller])
-		# print("Y small", self.y[smaller])
-		# print("X want", wantX)
-		# print("Y want", self.y[smaller] + yDiff*ratio)
-		# print("X big", self.x[bigger])
-		# print("Y big", self.y[bigger])
 		return self.y[smaller] + yDiff*ratio
-		# raise RuntimeError("getY loop did not return")
 
 def fakeIntegral(func, start, stop, steps):
 	tot = 0
@@ -67,7 +51,7 @@ def fakeIntegral(func, start, stop, steps):
 		last = this
 	return tot
 
-def intE(f, t1, t2, evStart, evStop, evNum):
+def getFourierY(f, t1, t2, evStart, evStop, evNum):
 	frequencies = np.linspace(evStart, evStop, evNum)
 	real = []
 	imag = []
@@ -81,29 +65,52 @@ def intE(f, t1, t2, evStart, evStop, evNum):
 	return real, imag
 
 
-def Fourier (tFunc):
+def innerFourier (tFunc, omega):
 	def f(time, freq):
-		return tFunc(time)*np.e**(-2*np.pi*freq*1j*time)
+		return tFunc(time)*np.e**(-omega*freq*1j*time)
 	return f
 
-def antiFourier (tFunc):
+def anitInnerFourier (tFunc, omega):
 	def f(freq, time):
-		return tFunc(freq)*np.e**(2*np.pi*freq*1j*time)
+		return tFunc(freq)*np.e**(omega*freq*1j*time)
 	return f
 
-start = 0
-end = 1
-freqStart = 0
-freqEnd = 40
+timeStart = 0
+timeEnd = 1
+# period = timeEnd - timeStart
+period = 1
+angularFrequency = (2*np.pi)/period
+freqEnd = 100
+freqStart = -freqEnd
+numSteps = 999
 
 wrapFreq = 1.0;
 # timeFunction = lambda x: np.cos((2*np.pi)*1*x)
 # timeFunction = lambda x: np.sin(((2*np.pi)/1)*x)
-timeFunction = lambda x: x
-timeToFreq = Fourier(timeFunction);
+# timeFunction = lambda x: x
+# timeFunction = lambda x: x**2
+def timeFunction(x):
+	mod = x%1
+	if(mod < 0.2):
+		return 0.0
+	if(mod < 0.4):
+		return 0.2
+	if(mod < 0.6):
+		return 0.4
+	if(mod < 0.8):
+		return 0.6
+	# if(mod < 1):
+	return 0.8
 
-timeSteps = np.linspace(start, end, 1000)
-freqSteps = np.linspace(freqStart, freqEnd, 1000)
+timeToFreq = innerFourier(timeFunction, angularFrequency);
+
+timeSteps = np.linspace(timeStart, timeEnd, numSteps)
+freqSteps = np.linspace(freqStart, freqEnd, numSteps)
+# freqSteps = []
+# i = freqStart
+# while (i <= freqEnd):
+# 	freqSteps.append(i)
+# 	i+=1
 
 fig, axs = plt.subplots(2,3)
 ax1 = axs[0,0]
@@ -132,15 +139,15 @@ y1 = list(map(lambda v: v.imag, res))
 # y1 = list(map(eFunc, x1))
 timeWrapLine, = ax1.plot(x1,y1)
 
-timeWeightX, err = integrate.quad(lambda x: timeToFreq(x, wrapFreq).real, start, end)
-timeWeightY, err = integrate.quad(lambda x: timeToFreq(x, wrapFreq).imag, start, end)
+timeWeightX, err = integrate.quad(lambda x: timeToFreq(x, wrapFreq).real, timeStart, timeStart + period)
+timeWeightY, err = integrate.quad(lambda x: timeToFreq(x, wrapFreq).imag, timeStart, timeStart + period)
 timeWeightCenter = ax1.scatter(timeWeightX, timeWeightY)
 
 x2 = timeSteps
 y2 = list(map(timeFunction, x2))
 ax2.plot(x2, y2);
 
-y3Real, y3Imag = intE(timeToFreq, start, end, freqStart, freqEnd, 1000)
+y3Real, y3Imag = getFourierY(timeToFreq, timeStart, timeStart+period, freqStart, freqEnd, numSteps)
 ax3.plot(freqSteps, y3Real, label="Real")
 ax3.plot(freqSteps, y3Imag, label="Imag")
 
@@ -150,8 +157,8 @@ fakeImag = fakeFunction(freqSteps, y3Imag)
 
 fakeFreq = lambda x: fakeReal.getY(x) + fakeImag.getY(x)*1j
 
-freqToTime = antiFourier(fakeReal.getY);
-imagFreqToTime = antiFourier(fakeImag.getY);
+freqToTime = anitInnerFourier(fakeReal.getY, angularFrequency);
+imagFreqToTime = anitInnerFourier(fakeImag.getY, angularFrequency);
 
 wrapTime = 0.5
 
@@ -160,8 +167,8 @@ x4 = list(map(lambda v: v.real, res))
 y4 = list(map(lambda v: v.imag, res))
 freqWrapLine, = ax4.plot(x4,y4)
 
-freqWeightX = fakeIntegral(lambda f: freqToTime(f, wrapTime).real, freqStart, freqEnd, 500)
-freqWeightY = fakeIntegral(lambda f: freqToTime(f, wrapTime).imag, freqStart, freqEnd, 500)
+freqWeightX = fakeIntegral(lambda f: freqToTime(f, wrapTime).real, freqStart, freqStart+period, 500)
+freqWeightY = fakeIntegral(lambda f: freqToTime(f, wrapTime).imag, freqStart, freqStart+period, 500)
 freqWeightCenter = ax4.scatter(freqWeightX, freqWeightY, color=(1,0,0,1))
 
 y5Real = []
@@ -169,15 +176,26 @@ y5Real = []
 for time in timeSteps:
 	y5Real.append(fakeIntegral(lambda f: freqToTime(f, time).real, freqStart, freqEnd, 500))
 	# y5Imag.append(fakeIntegral(lambda f: freqToTime(f, time).imag, freqStart, freqEnd, 100))
-# y5Real, y5Imag = fakeIntegral(freqToTime, freqStart, freqEnd, start, end, 1000)
+# y5Real, y5Imag = fakeIntegral(freqToTime, freqStart, freqEnd, timeStart, timeEnd, numSteps)
 ax5.plot(timeSteps, y5Real, label="Real")
 # ax5.plot(timeSteps, y5Imag, label="Imag")
 
 y6Real = []
+
 for ts in timeSteps:
 	tot = 0
-	for fi in range(1000):
-		tot += fakeReal.getY(freqSteps[fi])*np.cos(ts*(2*np.pi*freqSteps[fi]))
+	for freq in range(freqStart, freqEnd+1):
+		# if(freq < 0):
+		# 	continue
+		if(freq == 0.0):
+			tot += fakeReal.getY(0.0)
+			continue
+		cosA = fakeReal.getY(freq)
+		sinB = -1* fakeImag.getY(freq)
+		# cosA = 2 *fakeReal.getY(freq)
+		# sinB = -2* fakeImag.getY(freq)
+		tot += (cosA * np.cos(ts*freq*angularFrequency))
+		tot += sinB * np.sin(ts*freq*angularFrequency)
 	y6Real.append(tot)
 ax6.plot(timeSteps, y6Real)
 
@@ -196,7 +214,7 @@ ax3.set_title("Frequency Function")
 
 ax4.set_title("e. Frequency wrapped")
 ax5.set_title("Time Function integral recreated")
-ax6.set_title("Time Function cos recreated")
+ax6.set_title("Time Function acos + bsin recreated")
 
 ax1.set_xlabel("Real")
 ax1.set_ylabel("Imag")
@@ -227,8 +245,8 @@ def onclick(event):
 	timeWrapLine.set_xdata(x1)
 	timeWrapLine.set_ydata(y1)
 
-	timeWeightX, err = integrate.quad(lambda x: timeToFreq(x, wrapFreq).real, start, end)
-	timeWeightY, err = integrate.quad(lambda x: timeToFreq(x, wrapFreq).imag, start, end)
+	timeWeightX, err = integrate.quad(lambda x: timeToFreq(x, wrapFreq).real, timeStart, timeEnd)
+	timeWeightY, err = integrate.quad(lambda x: timeToFreq(x, wrapFreq).imag, timeStart, timeEnd)
 	timeWeightCenter.set_offsets([timeWeightX, timeWeightY])
 
 	res = list(map(lambda f: freqToTime(f, wrapTime), freqSteps))
